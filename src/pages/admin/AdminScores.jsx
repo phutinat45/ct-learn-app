@@ -21,8 +21,9 @@ function AdminScores() {
   const fetchScoreData = async () => {
     try {
       setLoading(true);
+      // ดึงข้อมูล User โดยเรียงตาม Username (รหัสนักเรียน) ไว้ก่อนเป็น Default
       const [usersRes, lessonsRes, progressRes] = await Promise.all([
-        supabase.from('users').select('*').eq('role', 'student').order('grade_level', { ascending: true }),
+        supabase.from('users').select('*').eq('role', 'student').order('username', { ascending: true }),
         supabase.from('lessons').select('*').order('id', { ascending: true }),
         supabase.from('progress').select('*')
       ]);
@@ -62,12 +63,38 @@ function AdminScores() {
     return lessons.filter(l => progressMap[`${userId}_${l.id}`]?.passed).length;
   };
 
-  const filteredUsers = users.filter(u => {
-    const matchSearch = (u.fullname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (u.username || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchGrade = selectedGrade === 'all' ? true : u.grade_level === selectedGrade;
-    return matchSearch && matchGrade;
-  });
+  // ✅ Logic การกรองและการเรียงลำดับ (แก้ไขส่วนนี้)
+  const getFilteredAndSortedUsers = () => {
+    // 1. กรองข้อมูลก่อน (Filter)
+    let result = users.filter(u => {
+      const matchSearch = (u.fullname || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()); // username มักจะเป็นรหัสนักเรียน
+      const matchGrade = selectedGrade === 'all' ? true : u.grade_level === selectedGrade;
+      return matchSearch && matchGrade;
+    });
+
+    // 2. เรียงลำดับ (Sort) ตามเงื่อนไข
+    if (selectedGrade !== 'all') {
+      // กรณีเลือกห้อง: เรียงตาม Username (รหัสนักเรียน/เลขที่) หรือ Fullname
+      result.sort((a, b) => {
+        // ลองเรียงตาม username (สมมติว่าเป็นรหัสนักเรียน)
+        // ถ้า username เป็นตัวเลข ให้แปลงเป็น int ก่อนเทียบ
+        const idA = parseInt(a.username) || 0;
+        const idB = parseInt(b.username) || 0;
+        
+        if (idA !== 0 && idB !== 0) {
+            return idA - idB; // เรียงตามรหัสเลขน้อยไปมาก
+        }
+        // ถ้าไม่ใช่ตัวเลข ให้เรียงตามชื่อ ก-ฮ
+        return (a.fullname || '').localeCompare(b.fullname || '', 'th');
+      });
+    } 
+    // กรณี selectedGrade === 'all' ไม่ต้องทำอะไรเพิ่ม (ใช้ลำดับเดิมจาก DB หรือตามที่โหลดมา)
+
+    return result;
+  };
+
+  const filteredUsers = getFilteredAndSortedUsers(); // เรียกใช้ฟังก์ชันแทนการ filter ตรงๆ
 
   const gradeLevels = [...new Set(users.map(u => u.grade_level).filter(g => g))].sort();
 
@@ -104,6 +131,8 @@ function AdminScores() {
   const exportToPDF = () => {
     try {
       const doc = new jsPDF();
+      // เพิ่ม font ภาษาไทยถ้าจำเป็น (ต้อง setup font ก่อนถึงจะแสดงผลภาษาไทยได้ถูกต้องใน PDF)
+      
       const tableColumn = ["Name", "Grade", "Total XP", "Passed"];
       const tableRows = [];
 
@@ -122,7 +151,7 @@ function AdminScores() {
         head: [tableColumn],
         body: tableRows,
         startY: 20,
-        styles: { fontSize: 8 },
+        styles: { fontSize: 8 }, // ถ้าไม่มี font ไทย ชื่ออาจจะเป็นสี่เหลี่ยม
       });
       doc.save("Student_Scores.pdf");
     } catch (err) {
@@ -132,18 +161,17 @@ function AdminScores() {
   };
 
   return (
-    // ปรับ style main container: เพิ่ม box-sizing และ overflow: hidden เพื่อไม่ให้ล้น frame
+    // ปรับ style main container
     <div className="card-box" style={{ 
       background: 'white', 
       borderRadius: '20px', 
       padding: '25px', 
       boxShadow: '0 4px 20px rgba(0,0,0,0.03)', 
       width: '100%', 
-      boxSizing: 'border-box', // สำคัญ: ป้องกัน padding ดันจนล้นจอ
-      overflow: 'hidden'       // สำคัญ: ตัดส่วนที่เกินออก
+      boxSizing: 'border-box', 
+      overflow: 'hidden' 
     }}>
       
-      {/* CSS ซ่อน Scrollbar */}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
@@ -203,7 +231,7 @@ function AdminScores() {
           <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.9rem' }}></i>
           <input
             type="text"
-            placeholder="ค้นหาชื่อ..."
+            placeholder="ค้นหาชื่อ หรือ รหัสนักเรียน..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.9rem' }}
@@ -223,12 +251,10 @@ function AdminScores() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#3b82f6' }}><i className="fa-solid fa-circle-notch fa-spin" style={{ fontSize: '1.8rem' }}></i><p>กำลังโหลด...</p></div>
       ) : (
-        // ใช้ class hide-scrollbar ที่นี่เพื่อซ่อน Scrollbar ของตาราง
         <div className="hide-scrollbar" style={{ width: '100%', overflowX: 'auto', borderRadius: '12px', border: '1px solid #f1f5f9' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', whiteSpace: 'nowrap', fontSize: '0.9rem' }}>
             <thead>
               <tr style={{ background: '#f8fafc', color: '#475569', textAlign: 'center', height: '50px' }}>
-                {/* Sticky Column */}
                 <th style={{ padding: '0 15px', position: 'sticky', left: 0, background: '#f8fafc', zIndex: 10, textAlign: 'left', minWidth: '200px', borderRight: '1px solid #e2e8f0' }}>ชื่อ - นามสกุล</th>
                 <th style={{ padding: '0 10px', minWidth: '80px' }}>ระดับชั้น</th>
                 {lessons.map((l, i) => (
