@@ -198,40 +198,41 @@ function Quiz() {
       });
   };
 
-  // ✅ ฟังก์ชันตรวจคำตอบ (รองรับทั้งแบบเลือกตอบ และ เรียงลำดับ)
+  // ✅ ฟังก์ชันตรวจคำตอบ (แก้ไขให้ไม่แสดง Pop-up ตอนผิด)
   const submitAnswer = (userAnswerData) => {
     const currentQ = questions[currentQuestion];
     let isCorrect = false;
 
-    // ตรวจแบบ Parsons (เทียบ Array ว่าเรียงตรงกับ options ต้นฉบับไหม)
+    // ตรวจแบบ Parsons
     if (currentQ.type === 'parsons' || currentQ.type === 'sorting') {
         const correctString = JSON.stringify(currentQ.options);
-        const userString = JSON.stringify(userAnswerData); // userAnswerData คือ array ที่ user เรียงแล้ว
+        const userString = JSON.stringify(userAnswerData); 
         isCorrect = correctString === userString;
     } 
-    // ตรวจแบบ Choice ปกติ
+    // ตรวจแบบ Choice
     else {
         isCorrect = userAnswerData === currentQ.correctAnswer;
     }
 
     if (isCorrect) {
         playSound('correct');
-        Swal.fire({ icon: 'success', title: 'ถูกต้อง! 🎉', timer: 800, showConfirmButton: false, backdrop: `rgba(0,0,0,0.1)`, width: 300 });
-    } else {
-        playSound('wrong');
+        // แสดงเฉพาะตอนถูก
         Swal.fire({ 
-            icon: 'error', 
-            title: 'ผิดครับ 😅', 
-            text: currentQ.explanation ? `คำอธิบาย: ${currentQ.explanation}` : 'ลองทบทวนใหม่อีกนิดนะ',
-            confirmButtonText: 'ไปต่อ',
-            confirmButtonColor: '#ef4444',
+            icon: 'success', 
+            title: 'ถูกต้อง! 🎉', 
+            timer: 800, 
+            showConfirmButton: false, 
             backdrop: `rgba(0,0,0,0.1)`, 
-            width: 400 
+            width: 300 
         });
+    } else {
+        playSound('wrong'); // เล่นเสียงผิด แต่ไม่แสดง Pop-up
+        // ❌ เอา Swal.fire ตอนผิดออก
     }
 
     if (isCorrect) setScore(prev => prev + 1);
 
+    // ไปข้อต่อไป (ถ้าผิดก็ไปต่อเลย เร็วกว่าตอนถูกนิดหน่อย)
     setTimeout(() => {
       const nextQ = currentQuestion + 1;
       if (nextQ < questions.length) {
@@ -239,7 +240,7 @@ function Quiz() {
       } else {
         finishQuiz(isCorrect ? score + 1 : score);
       }
-    }, isCorrect ? 800 : 2000);
+    }, isCorrect ? 800 : 500); // ถ้าผิด รอแค่ 0.5 วิ แล้วไปต่อเลย
   };
 
   // ✅ ฟังก์ชันจัดการการลากวาง (Drag End)
@@ -249,6 +250,7 @@ function Quiz() {
       setParsonsItems(items);
   };
 
+  // ✅ ฟังก์ชันจบเกม (เก็บ High Score)
   const finishQuiz = async (finalScore) => {
     setGameState('finished');
     if (bgmRef.current) bgmRef.current.pause();
@@ -269,14 +271,31 @@ function Quiz() {
         const userStr = localStorage.getItem('currentUser');
         if (userStr) {
             const user = JSON.parse(userStr);
-            const { data: existing } = await supabase.from('progress').select('*').eq('student_id', user.id).eq('lesson_id', id).single();
+            const { data: existing } = await supabase
+                .from('progress')
+                .select('*')
+                .eq('student_id', user.id)
+                .eq('lesson_id', id)
+                .single();
             
             if (existing) {
-                await supabase.from('progress').update({ passed: passed || existing.passed, score: finalScore }).eq('id', existing.id);
+                // อัปเดตเฉพาะเมื่อคะแนนเยอะกว่าเดิม
+                if (finalScore > existing.score) {
+                    await supabase.from('progress').update({ 
+                        passed: passed || existing.passed, 
+                        score: finalScore 
+                    }).eq('id', existing.id);
+                    window.dispatchEvent(new Event('xp-updated'));
+                }
             } else {
-                await supabase.from('progress').insert({ student_id: user.id, lesson_id: id, passed: passed, score: finalScore });
+                await supabase.from('progress').insert({ 
+                    student_id: user.id, 
+                    lesson_id: id, 
+                    passed: passed, 
+                    score: finalScore 
+                });
+                window.dispatchEvent(new Event('xp-updated'));
             }
-            if (passed && (!existing || !existing.passed)) window.dispatchEvent(new Event('xp-updated'));
         }
     } catch (err) { console.error(err); }
   };
@@ -366,7 +385,6 @@ function Quiz() {
 
   // --- Playing Screen ---
   const currentQ = questions[currentQuestion];
-  // ตรวจว่าเป็นโจทย์เรียงลำดับหรือไม่?
   const isParsons = currentQ.type === 'parsons' || currentQ.type === 'sorting';
 
   return (
