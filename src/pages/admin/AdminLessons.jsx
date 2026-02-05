@@ -394,17 +394,54 @@ function AdminLessons() {
                                     <i className="fa-solid fa-circle" style={{fontSize:'6px'}}></i> {l.difficulty}
                                 </div>
                             </td>
-                            <td style={{ padding: '15px' }}><span style={{ background: '#f1f5f9', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', color: '#475569', border: '1px solid #e2e8f0', fontWeight:'500' }}>{l.category}</span></td>
+                            
+                            {/* ✅ แก้ไข: หมวดหมู่ (ตัดคำถ้ายาวเกินไป) */}
                             <td style={{ padding: '15px' }}>
-                                <div style={{ fontSize: '0.9rem' }}><span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{l.xp} XP</span></div>
-                                <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop:'2px' }}><i className="fa-regular fa-clock"></i> {l.duration}</div>
+                                <span 
+                                    title={l.category} 
+                                    style={{ 
+                                        background: '#f1f5f9', 
+                                        padding: '6px 14px', 
+                                        borderRadius: '20px', 
+                                        fontSize: '0.85rem', 
+                                        color: '#475569', 
+                                        border: '1px solid #e2e8f0', 
+                                        fontWeight:'500',
+                                        // --- ส่วนตัดคำ ---
+                                        display: 'inline-block',
+                                        maxWidth: '150px',       // กำหนดความกว้างสูงสุด (ปรับได้ตามชอบ)
+                                        whiteSpace: 'nowrap',    // ห้ามขึ้นบรรทัดใหม่
+                                        overflow: 'hidden',      // ซ่อนส่วนที่เกิน
+                                        textOverflow: 'ellipsis', // แสดงจุดไข่ปลา (...)
+                                        verticalAlign: 'middle'
+                                    }}
+                                >
+                                    {l.category}
+                                </span>
                             </td>
-                            <td style={{ padding: '15px' }}><span style={{ background: '#eff6ff', color: '#3b82f6', padding: '6px 12px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold' }}>{l.quiz ? l.quiz.length : 0} ข้อ</span></td>
+
                             <td style={{ padding: '15px' }}>
-                                <span style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', background: l.status === 'published' ? '#dcfce7' : '#f1f5f9', color: l.status === 'published' ? '#16a34a' : '#64748b' }}>
+                                <div style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}><span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{l.xp} XP</span></div>
+                                <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginTop:'2px', whiteSpace: 'nowrap' }}><i className="fa-regular fa-clock"></i> {l.duration}</div>
+                            </td>
+                            <td style={{ padding: '15px' }}><span style={{ background: '#eff6ff', color: '#3b82f6', padding: '6px 12px', borderRadius: '10px', fontSize: '0.85rem', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{l.quiz ? l.quiz.length : 0} ข้อ</span></td>
+                            
+                            {/* ✅ แก้ไข: สถานะ (บังคับบรรทัดเดียว) */}
+                            <td style={{ padding: '15px' }}>
+                                <span style={{ 
+                                    padding: '6px 14px', 
+                                    borderRadius: '20px', 
+                                    fontSize: '0.85rem', 
+                                    fontWeight: 'bold', 
+                                    background: l.status === 'published' ? '#dcfce7' : '#f1f5f9', 
+                                    color: l.status === 'published' ? '#16a34a' : '#64748b',
+                                    whiteSpace: 'nowrap', // ห้ามตัดบรรทัด
+                                    display: 'inline-block'
+                                }}>
                                     {l.status === 'published' ? 'เผยแพร่' : 'แบบร่าง'}
                                 </span>
                             </td>
+
                             <td style={{ padding: '15px', textAlign: 'center' }}>
                                 <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
                                     <button onClick={() => handleEditLesson(l)} style={{ background: 'white', border: '1px solid #cbd5e1', color: '#475569', width: '38px', height: '38px', borderRadius: '10px', cursor: 'pointer', transition:'all 0.2s' }} className="hover-scale"><i className="fa-solid fa-pen"></i></button>
