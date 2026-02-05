@@ -23,13 +23,13 @@ function AdminLessons() {
   const [quizImageFiles, setQuizImageFiles] = useState({}); 
 
   // Categories State
-  const [categories, setCategories] = useState(['Computational Thinking', 'Coding', 'Algorithm', 'วิทยาการคำนวณ']);
+  const [categories, setCategories] = useState([]); 
   const [newCategory, setNewCategory] = useState('');
   const [isManagingCategory, setIsManagingCategory] = useState(false); 
 
   // Default Lesson Structure
   const defaultLesson = { 
-      title: '', category: 'Computational Thinking', difficulty: 'Easy', 
+      title: '', category: '', difficulty: 'Easy', 
       xp: 100, duration: '15 นาที', status: 'published', 
       image: null, description: '', 
       scenario: '', 
@@ -39,7 +39,25 @@ function AdminLessons() {
   };
   const [currentLesson, setCurrentLesson] = useState(defaultLesson);
 
-  useEffect(() => { fetchLessons(); }, []);
+  useEffect(() => { 
+      fetchLessons(); 
+      fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+      try {
+          const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
+          if (data) {
+              setCategories(data.map(c => c.name));
+              if (!currentLesson.category && data.length > 0) {
+                  setCurrentLesson(prev => ({...prev, category: data[0].name}));
+              }
+          }
+          if (error) console.error("Error fetching categories:", error);
+      } catch (err) {
+          console.error("Cat Error:", err);
+      }
+  };
 
   const fetchLessons = async () => {
     try {
@@ -57,13 +75,18 @@ function AdminLessons() {
   // --- Handlers ---
   const handleAddLesson = () => { 
       setIsEditingLesson(false); 
-      setCurrentLesson(defaultLesson); 
+      const firstCategory = categories.length > 0 ? categories[0] : '';
+      setCurrentLesson({ ...defaultLesson, category: firstCategory }); 
       setPreviewImage(null);
       setSelectedImageFile(null);
       setSelectedSlideFile(null);
       setPreviewSlideName(null);
       setQuizImageFiles({}); 
-      setActiveLessonTab('info'); 
+      setActiveLessonTab('info');
+      
+      // ✅ รีเซ็ตตัวจัดการหมวดหมู่ให้ปิดทุกครั้งที่เปิด Modal ใหม่
+      setIsManagingCategory(false); 
+      
       setShowLessonModal(true); 
   };
   
@@ -72,7 +95,6 @@ function AdminLessons() {
       setCurrentLesson({ 
           ...l, 
           quiz: l.quiz || [],
-          // Ensure xp has a fallback if null
           xp: l.xp !== undefined && l.xp !== null ? l.xp : 100, 
           duration: l.duration || '15 นาที',
           slide_url: l.slide_url || null,
@@ -83,7 +105,11 @@ function AdminLessons() {
       setSelectedSlideFile(null);
       setPreviewSlideName(null);
       setQuizImageFiles({});
-      setActiveLessonTab('info'); 
+      setActiveLessonTab('info');
+      
+      // ✅ รีเซ็ตตัวจัดการหมวดหมู่ให้ปิดทุกครั้งที่เปิด Modal แก้ไข
+      setIsManagingCategory(false);
+      
       setShowLessonModal(true); 
   };
 
@@ -127,19 +153,68 @@ function AdminLessons() {
   };
 
   // --- Category Handlers ---
-  const handleAddCategory = () => {
-      if (newCategory.trim() !== "") {
-          setCategories([...categories, newCategory.trim()]);
-          setCurrentLesson({ ...currentLesson, category: newCategory.trim() });
+  const handleAddCategory = async () => {
+      const catName = newCategory.trim();
+      if (!catName) return;
+
+      if (categories.includes(catName)) {
+          Swal.fire('แจ้งเตือน', 'มีหมวดหมู่นี้อยู่แล้ว', 'warning');
+          return;
+      }
+
+      try {
+          const { error } = await supabase.from('categories').insert([{ name: catName }]);
+          if (error) throw error;
+
+          setCategories([...categories, catName]);
+          setCurrentLesson({ ...currentLesson, category: catName });
           setNewCategory('');
+          
+          // ✅ ปิดกล่องเพิ่มหมวดหมู่ทันทีเมื่อเพิ่มเสร็จ
+          setIsManagingCategory(false);
+
+          Swal.fire({
+              icon: 'success',
+              title: 'เพิ่มหมวดหมู่แล้ว',
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 1500
+          });
+
+      } catch (err) {
+          console.error("Add Cat Error:", err);
+          Swal.fire('Error', 'ไม่สามารถบันทึกหมวดหมู่ได้', 'error');
       }
   };
 
-  const handleDeleteCategory = (catToDelete) => {
-      const updatedCats = categories.filter(c => c !== catToDelete);
-      setCategories(updatedCats);
-      if (currentLesson.category === catToDelete) {
-          setCurrentLesson({ ...currentLesson, category: updatedCats[0] || '' });
+  const handleDeleteCategory = async (catToDelete) => {
+      const result = await Swal.fire({
+          title: 'ลบหมวดหมู่?',
+          text: `คุณต้องการลบ "${catToDelete}" ใช่หรือไม่?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          confirmButtonText: 'ใช่, ลบเลย'
+      });
+
+      if (!result.isConfirmed) return;
+
+      try {
+          const { error } = await supabase.from('categories').delete().eq('name', catToDelete);
+          if (error) throw error;
+
+          const updatedCats = categories.filter(c => c !== catToDelete);
+          setCategories(updatedCats);
+          if (currentLesson.category === catToDelete) {
+              setCurrentLesson({ ...currentLesson, category: updatedCats[0] || '' });
+          }
+
+          Swal.fire('ลบแล้ว', 'หมวดหมู่ถูกลบเรียบร้อย', 'success');
+
+      } catch (err) {
+          console.error("Del Cat Error:", err);
+          Swal.fire('Error', 'ลบไม่สำเร็จ (อาจมีการใช้งานอยู่)', 'error');
       }
   };
 
@@ -199,7 +274,7 @@ function AdminLessons() {
             title: currentLesson.title,
             category: currentLesson.category,
             difficulty: currentLesson.difficulty,
-            xp: parseInt(currentLesson.xp) || 0, // Ensure it's an integer
+            xp: parseInt(currentLesson.xp) || 0,
             duration: currentLesson.duration,
             status: currentLesson.status,
             description: currentLesson.description,
@@ -411,7 +486,6 @@ function AdminLessons() {
                                 <div style={{ display: 'flex', gap: '20px' }}>
                                     <div style={{ flex: 1 }}><label className="form-label" style={{fontWeight:'bold', color:'#334155'}}>ความยาก</label><select className="form-control" style={{width:'100%', padding:'12px', borderRadius:'10px', border:'1px solid #e2e8f0'}} value={currentLesson.difficulty} onChange={e => setCurrentLesson({...currentLesson, difficulty: e.target.value})}><option value="Easy">ระดับฝึกหัด</option><option value="Medium">ระดับทั่วไป</option><option value="Hard">ระดับเซียน</option></select></div>
                                     
-                                    {/* ✅ Added XP Input Field Here */}
                                     <div style={{ flex: 1 }}>
                                         <label className="form-label" style={{fontWeight:'bold', color:'#334155'}}>XP (คะแนน)</label>
                                         <input 
@@ -419,7 +493,7 @@ function AdminLessons() {
                                             className="form-control" 
                                             style={{width:'100%', padding:'12px', borderRadius:'10px', border:'1px solid #e2e8f0'}} 
                                             value={currentLesson.xp} 
-                                            onChange={e => setCurrentLesson({...currentLesson, xp: parseInt(e.target.value) || 0})} // แปลงเป็นตัวเลข
+                                            onChange={e => setCurrentLesson({...currentLesson, xp: parseInt(e.target.value) || 0})}
                                         />
                                     </div>
 
@@ -430,10 +504,9 @@ function AdminLessons() {
                         </div>
                     )}
 
-                    {/* ... Rest of the component (Content Tab, Quiz Tab) remains the same ... */}
+                    {/* ... Content Tab (PBL) ... */}
                     {activeLessonTab === 'content' && (
                         <div>
-                            {/* Scenario Input */}
                             <div style={{ marginBottom: '25px', background:'#eff6ff', padding:'20px', borderRadius:'12px', border:'1px solid #bfdbfe' }}>
                                 <label className="form-label" style={{fontWeight:'bold', color:'#2563eb', display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px'}}>
                                     <i className="fa-solid fa-puzzle-piece"></i> สถานการณ์ปัญหา (Scenario)
@@ -460,6 +533,7 @@ function AdminLessons() {
                         </div>
                     )}
 
+                    {/* Quiz Tab */}
                     {activeLessonTab === 'quiz' && (
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
