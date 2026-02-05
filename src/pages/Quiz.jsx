@@ -198,41 +198,40 @@ function Quiz() {
       });
   };
 
-  // ✅ ฟังก์ชันตรวจคำตอบ (แก้ไขให้ไม่แสดง Pop-up ตอนผิด)
+  // ✅ ฟังก์ชันตรวจคำตอบ (แก้ไขส่วนนี้ครับ)
   const submitAnswer = (userAnswerData) => {
     const currentQ = questions[currentQuestion];
     let isCorrect = false;
 
-    // ตรวจแบบ Parsons
+    // ตรวจแบบ Parsons (เทียบ Array ว่าเรียงตรงกับ options ต้นฉบับไหม)
     if (currentQ.type === 'parsons' || currentQ.type === 'sorting') {
         const correctString = JSON.stringify(currentQ.options);
-        const userString = JSON.stringify(userAnswerData); 
+        const userString = JSON.stringify(userAnswerData); // userAnswerData คือ array ที่ user เรียงแล้ว
         isCorrect = correctString === userString;
     } 
-    // ตรวจแบบ Choice
+    // ตรวจแบบ Choice ปกติ
     else {
         isCorrect = userAnswerData === currentQ.correctAnswer;
     }
 
     if (isCorrect) {
         playSound('correct');
-        // แสดงเฉพาะตอนถูก
+        Swal.fire({ icon: 'success', title: 'ถูกต้อง! 🎉', timer: 800, showConfirmButton: false, backdrop: `rgba(0,0,0,0.1)`, width: 300 });
+        setScore(prev => prev + 1);
+    } else {
+        playSound('wrong');
+        // ✅ เปลี่ยนตรงนี้: ใช้ timer เหมือนตอบถูก ไม่ต้องมีปุ่มกดแล้ว
         Swal.fire({ 
-            icon: 'success', 
-            title: 'ถูกต้อง! 🎉', 
-            timer: 800, 
+            icon: 'error', 
+            title: 'ผิดครับ 😅', 
+            timer: 800, // ปิดเองใน 0.8 วินาที
             showConfirmButton: false, 
             backdrop: `rgba(0,0,0,0.1)`, 
             width: 300 
         });
-    } else {
-        playSound('wrong'); // เล่นเสียงผิด แต่ไม่แสดง Pop-up
-        // ❌ เอา Swal.fire ตอนผิดออก
     }
 
-    if (isCorrect) setScore(prev => prev + 1);
-
-    // ไปข้อต่อไป (ถ้าผิดก็ไปต่อเลย เร็วกว่าตอนถูกนิดหน่อย)
+    // เปลี่ยนข้ออัตโนมัติ (หน่วงเวลาเท่ากันทั้งถูกและผิด)
     setTimeout(() => {
       const nextQ = currentQuestion + 1;
       if (nextQ < questions.length) {
@@ -240,7 +239,7 @@ function Quiz() {
       } else {
         finishQuiz(isCorrect ? score + 1 : score);
       }
-    }, isCorrect ? 800 : 500); // ถ้าผิด รอแค่ 0.5 วิ แล้วไปต่อเลย
+    }, 1000); // รอ 1 วินาทีแล้วไปต่อ
   };
 
   // ✅ ฟังก์ชันจัดการการลากวาง (Drag End)
@@ -250,7 +249,6 @@ function Quiz() {
       setParsonsItems(items);
   };
 
-  // ✅ ฟังก์ชันจบเกม (เก็บ High Score)
   const finishQuiz = async (finalScore) => {
     setGameState('finished');
     if (bgmRef.current) bgmRef.current.pause();
@@ -271,29 +269,16 @@ function Quiz() {
         const userStr = localStorage.getItem('currentUser');
         if (userStr) {
             const user = JSON.parse(userStr);
-            const { data: existing } = await supabase
-                .from('progress')
-                .select('*')
-                .eq('student_id', user.id)
-                .eq('lesson_id', id)
-                .single();
+            const { data: existing } = await supabase.from('progress').select('*').eq('student_id', user.id).eq('lesson_id', id).single();
             
             if (existing) {
                 // อัปเดตเฉพาะเมื่อคะแนนเยอะกว่าเดิม
                 if (finalScore > existing.score) {
-                    await supabase.from('progress').update({ 
-                        passed: passed || existing.passed, 
-                        score: finalScore 
-                    }).eq('id', existing.id);
+                    await supabase.from('progress').update({ passed: passed || existing.passed, score: finalScore }).eq('id', existing.id);
                     window.dispatchEvent(new Event('xp-updated'));
                 }
             } else {
-                await supabase.from('progress').insert({ 
-                    student_id: user.id, 
-                    lesson_id: id, 
-                    passed: passed, 
-                    score: finalScore 
-                });
+                await supabase.from('progress').insert({ student_id: user.id, lesson_id: id, passed: passed, score: finalScore });
                 window.dispatchEvent(new Event('xp-updated'));
             }
         }
@@ -419,7 +404,6 @@ function Quiz() {
              {isParsons && <div style={{fontSize:'0.9rem', color:'#64748b', marginTop:'10px'}}><i className="fa-solid fa-arrow-down-up-across-line"></i> ลากกล่องข้อความเพื่อเรียงลำดับให้ถูกต้อง</div>}
           </h2>
           
-          {/* ✅ ส่วนแสดงผล: ถ้าเป็น Parsons แสดงแบบลากวาง ถ้าไม่ใช่แสดงปุ่มกด */}
           {isParsons ? (
              <div className="parsons-area">
                  <DragDropContext onDragEnd={onDragEnd}>
